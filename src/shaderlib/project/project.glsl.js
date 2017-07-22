@@ -32,7 +32,10 @@ uniform float projectionMode;
 uniform float projectionScale;
 uniform vec4 projectionCenter;
 uniform vec3 projectionPixelsPerUnit;
+uniform vec3 projectionPixelsPerDegree;
+uniform mat2 degreesPerUnit;
 
+uniform mat4 modelMatrix;
 uniform mat4 modelViewMatrix;
 uniform mat4 projectionMatrix;
 uniform mat4 projectionMatrixUncentered;
@@ -47,24 +50,20 @@ float project_scale(float meters) {
 
 vec2 project_scale(vec2 meters) {
   return vec2(
-    meters.x * projectionPixelsPerUnit.x,
-    meters.y * projectionPixelsPerUnit.x
+    meters * degreesPerUnit * projectionPixelsPerDegree.xy
   );
 }
 
 vec3 project_scale(vec3 meters) {
   return vec3(
-    meters.x * projectionPixelsPerUnit.x,
-    meters.y * projectionPixelsPerUnit.x,
-    meters.z * projectionPixelsPerUnit.x
+    project_scale(meters.xy),
+    meters.z * projectionPixelsPerUnit.z
   );
 }
 
 vec4 project_scale(vec4 meters) {
   return vec4(
-    meters.x * projectionPixelsPerUnit.x,
-    meters.y * projectionPixelsPerUnit.x,
-    meters.z * projectionPixelsPerUnit.x,
+    project_scale(meters.xyz),
     meters.w
   );
 }
@@ -93,7 +92,8 @@ vec2 project_position(vec2 position) {
 }
 
 vec3 project_position(vec3 position) {
-  return vec3(project_position(position.xy), project_scale(position.z));
+  vec4 modelPosition = modelMatrix * vec4(position, 1.0);
+  return vec3(project_position(modelPosition.xy), project_scale(modelPosition.z));
 }
 
 vec4 project_position(vec4 position) {

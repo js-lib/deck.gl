@@ -6,6 +6,7 @@ import mat4_rotateX from 'gl-mat4/rotateX';
 import mat4_rotateZ from 'gl-mat4/rotateZ';
 import vec2_distance from 'gl-vec2/distance';
 import assert from 'assert';
+import * as utm from 'utm';
 
 // CONSTANTS
 const PI = Math.PI;
@@ -15,7 +16,7 @@ const RADIANS_TO_DEGREES = 180 / PI;
 const TILE_SIZE = 512;
 const WORLD_SCALE = TILE_SIZE;
 
-const METERS_PER_DEGREE_AT_EQUATOR = 111000; // Approximately 111km per degree at equator
+// const METERS_PER_DEGREE_AT_EQUATOR = 111000; // Approximately 111km per degree at equator
 
 // Helper, avoids low-precision 32 bit matrices from gl-matrix mat4.create()
 function createMat4() {
@@ -57,6 +58,26 @@ export function unprojectFlat([x, y], scale) {
   return [lambda2 * RADIANS_TO_DEGREES, phi2 * RADIANS_TO_DEGREES];
 }
 
+function invertMat2(a) {
+  const a0 = a[0];
+  const a1 = a[1];
+  const a2 = a[2];
+  const a3 = a[3];
+  // Calculate the determinant
+  let det = a0 * a3 - a2 * a1;
+  if (!det) {
+    return null;
+  }
+  det = 1.0 / det;
+
+  const out = [];
+  out[0] = a3 * det;
+  out[1] = -a1 * det;
+  out[2] = -a2 * det;
+  out[3] = a0 * det;
+  return out;
+}
+
 /**
  * Calculate distance scales in meters around current lat/lon, both for
  * degrees and pixels.
@@ -71,7 +92,8 @@ export function calculateDistanceScales({latitude, longitude, zoom, scale}) {
 
   const latCosine = Math.cos(latitude * Math.PI / 180);
 
-  const metersPerDegree = METERS_PER_DEGREE_AT_EQUATOR * latCosine;
+  // const metersPerDegreeX = METERS_PER_DEGREE_AT_EQUATOR * latCosine;
+  // const metersPerDegreeY = METERS_PER_DEGREE_AT_EQUATOR;
 
   // Calculate number of pixels occupied by one degree longitude
   // around current lat/lon
@@ -86,15 +108,28 @@ export function calculateDistanceScales({latitude, longitude, zoom, scale}) {
     projectFlat([longitude, latitude - 0.5], scale)
   );
 
-  const pixelsPerMeterX = pixelsPerDegreeX / metersPerDegree;
-  const pixelsPerMeterY = pixelsPerDegreeY / metersPerDegree;
-  const pixelsPerMeterZ = (pixelsPerMeterX + pixelsPerMeterY) / 2;
-  // const pixelsPerMeter = [pixelsPerMeterX, pixelsPerMeterY, pixelsPerMeterZ];
+  const center = utm.fromLatLon(latitude, longitude);
+  const east = utm.fromLatLon(latitude, longitude + 0.5, center.zoneNum);
+  const west = utm.fromLatLon(latitude, longitude - 0.5, center.zoneNum);
+  const north = utm.fromLatLon(latitude + 0.5, longitude, center.zoneNum);
+  const south = utm.fromLatLon(latitude - 0.5, longitude, center.zoneNum);
+
+  const metersPerDegree = [
+    east.easting - west.easting,
+    east.northing - west.northing,
+    north.easting - south.easting,
+    north.northing - south.northing
+  ];
 
   const worldSize = TILE_SIZE * scale;
   const altPixelsPerMeter = worldSize / (4e7 * latCosine);
-  const pixelsPerMeter = [altPixelsPerMeter, altPixelsPerMeter, altPixelsPerMeter];
-  const metersPerPixel = [1 / altPixelsPerMeter, 1 / altPixelsPerMeter, 1 / pixelsPerMeterZ];
+
+  const pixelsPerMeterX = pixelsPerDegreeX / metersPerDegree[0];
+  const pixelsPerMeterY = pixelsPerDegreeY / metersPerDegree[2];
+  const pixelsPerMeterZ = altPixelsPerMeter;
+  const pixelsPerMeter = [pixelsPerMeterX, pixelsPerMeterY, pixelsPerMeterZ];
+
+  const metersPerPixel = [1 / pixelsPerMeterX, 1 / pixelsPerMeterY, 1 / pixelsPerMeterZ];
 
   const pixelsPerDegree = [pixelsPerDegreeX, pixelsPerDegreeY, pixelsPerMeterZ];
   const degreesPerPixel = [1 / pixelsPerDegreeX, 1 / pixelsPerDegreeY, 1 / pixelsPerMeterZ];
@@ -104,7 +139,9 @@ export function calculateDistanceScales({latitude, longitude, zoom, scale}) {
     pixelsPerMeter,
     metersPerPixel,
     pixelsPerDegree,
-    degreesPerPixel
+    degreesPerPixel,
+    metersPerDegree,
+    degreesPerMeter: invertMat2(metersPerDegree)
   };
 }
 

@@ -37,6 +37,7 @@ function fp64ify(a) {
 const ZERO_VECTOR = [0, 0, 0, 0];
 // 4x4 matrix that drops 4th component of vector
 const VECTOR_TO_POINT_MATRIX = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0];
+const IDENTITY_MATRIX = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 
 // The code that utilizes Matrix4 does the same calculation as their mat4 counterparts,
 // has lower performance but provides error checking.
@@ -89,7 +90,7 @@ function calculateMatrixAndOffset({
   if (modelMatrix) {
     // Apply model matrix if supplied
     // modelViewMatrix.multiplyRight(modelMatrix);
-    mat4_multiply(modelViewMatrix, modelViewMatrix, modelMatrix);
+    // mat4_multiply(modelViewMatrix, modelViewMatrix, modelMatrix);
   }
 
   // const modelViewProjectionMatrix = new Matrix4(projectionMatrix).multiplyRight(modelViewMatrix);
@@ -131,8 +132,8 @@ export function getUniformsFromViewport({
   assert(modelViewProjectionMatrix, 'Viewport missing modelViewProjectionMatrix');
 
   // Calculate projection pixels per unit
-  const projectionPixelsPerUnit = viewport.getDistanceScales().pixelsPerMeter;
-  assert(projectionPixelsPerUnit, 'Viewport missing pixelsPerMeter');
+  const {pixelsPerMeter, pixelsPerDegree, degreesPerMeter} = viewport.getDistanceScales();
+  assert(pixelsPerMeter, 'Viewport missing pixelsPerMeter');
 
   // calculate WebGL matrices
 
@@ -158,7 +159,7 @@ export function getUniformsFromViewport({
     projectionMode,
     projectionCenter,
 
-    // modelMatrix: modelMatrix || new Matrix4().identity(),
+    modelMatrix: new Float32Array(modelMatrix || IDENTITY_MATRIX),
     modelViewMatrix: new Float32Array(modelViewMatrix),
 
     // Screen size
@@ -170,7 +171,9 @@ export function getUniformsFromViewport({
     projectionMatrixUncentered: glProjectionMatrix,
     projectionFP64: glProjectionMatrixFP64,
 
-    projectionPixelsPerUnit,
+    projectionPixelsPerUnit: pixelsPerMeter,
+    projectionPixelsPerDegree: pixelsPerDegree,
+    degreesPerUnit: degreesPerMeter,
     projectionScale: viewport.scale, // This is the mercator scale (2 ** zoom)
     projectionScaleFP64: fp64ify(viewport.scale), // Deprecated?
 
